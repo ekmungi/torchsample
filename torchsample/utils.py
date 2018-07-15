@@ -59,7 +59,7 @@ def th_uniform(lower, upper):
 
 def th_gather_nd(x, coords):
     x = x.contiguous()
-    inds = coords.mv(th.LongTensor(x.stride()))
+    inds = coords.mv(th.FloatTensor(x.stride()))
     x_gather = th.index_select(th_flatten(x), 0, inds)
     return x_gather
 
@@ -141,7 +141,7 @@ def th_nearest_interp2d(input, coords):
     x = th.clamp(coords[:,:,0], 0, input.size(1)-1).round()
     y = th.clamp(coords[:,:,1], 0, input.size(2)-1).round()
 
-    stride = th.LongTensor(input.stride())
+    stride = th.FloatTensor(input.stride())
     x_ix = x.mul(stride[1]).long()
     y_ix = y.mul(stride[2]).long()
 
@@ -163,7 +163,7 @@ def th_bilinear_interp2d(input, coords):
     y0 = y.floor()
     y1 = y0 + 1
 
-    stride = th.LongTensor(input.stride())
+    stride = th.FloatTensor(input.stride())
     x0_ix = x0.mul(stride[1]).long()
     x1_ix = x1.mul(stride[1]).long()
     y0_ix = y0.mul(stride[2]).long()
@@ -236,7 +236,7 @@ def th_nearest_interp3d(input, coords):
     coords[:,1] = th.clamp(coords[:,1], 0, input.size(2)-1).round()
     coords[:,2] = th.clamp(coords[:,2], 0, input.size(3)-1).round()
 
-    stride = th.LongTensor(input.stride())[1:].float()
+    stride = th.FloatTensor(input.stride())[1:].float()
     idx = coords.mv(stride).long()
 
     input_flat = th_flatten(input)
@@ -263,7 +263,7 @@ def th_trilinear_interp3d(input, coords):
     z0 = z.floor()
     z1 = z0 + 1
 
-    stride = th.LongTensor(input.stride())[1:]
+    stride = th.FloatTensor(input.stride())[1:]
     x0_ix = x0.mul(stride[0]).long()
     x1_ix = x1.mul(stride[0]).long()
     y0_ix = y0.mul(stride[1]).long()

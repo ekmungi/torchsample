@@ -10,6 +10,7 @@ import numpy as np
 import pandas as pd
 import PIL.Image as Image
 import nibabel
+from imageio import imread
 
 import torch as th
 
@@ -262,6 +263,8 @@ class TensorDataset(BaseDataset):
 def default_file_reader(x):
     def pil_loader(path):
         return Image.open(path).convert('RGB')
+    def imageio_loader(path):
+        return imread(path)
     def npy_loader(path):
         return np.load(path)
     def nifti_loader(path):
@@ -269,11 +272,12 @@ def default_file_reader(x):
     if isinstance(x, str):
         if x.endswith('.npy'):
             x = npy_loader(x)
-        elif x.endsiwth('.nii.gz'):
+        elif x.endswith('.nii.gz'):
             x = nifti_loader(x)
         else:
             try:
-                x = pil_loader(x)
+                # x = pil_loader(x)
+                x = imageio_loader(x)
             except:
                 raise ValueError('File Format is not supported')
     #else:
@@ -411,7 +415,7 @@ class CSVDataset(BaseDataset):
         if self.has_target:
             target_sample = [self.target_transform[i](self.target_loader(self.targets[index, i])) for i in range(self.num_targets)]
             for i in range(self.min_inputs_or_targets):
-                input_sample[i], input_sample[i] = self.co_transform[i](input_sample[i], target_sample[i])
+                input_sample[i], target_sample[i] = self.co_transform[i](input_sample[i], target_sample[i])
 
             return self.input_return_processor(input_sample), self.target_return_processor(target_sample)
         else:
