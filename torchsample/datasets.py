@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import PIL.Image as Image
 import nibabel
-from imageio import imread
+from cv2 import imread
 
 import torch as th
 
@@ -263,8 +263,8 @@ class TensorDataset(BaseDataset):
 def default_file_reader(x):
     def pil_loader(path):
         return Image.open(path).convert('RGB')
-    def imageio_loader(path):
-        return imread(path)
+    def pil_loader_2(path):
+        return np.array(Image.open(path))
     def npy_loader(path):
         return np.load(path)
     def nifti_loader(path):
@@ -277,7 +277,8 @@ def default_file_reader(x):
         else:
             try:
                 # x = pil_loader(x)
-                x = imageio_loader(x)
+                # print(x)
+                x = pil_loader_2(x)
             except:
                 raise ValueError('File Format is not supported')
     #else:
@@ -420,6 +421,9 @@ class CSVDataset(BaseDataset):
             return self.input_return_processor(input_sample), self.target_return_processor(target_sample)
         else:
             return self.input_return_processor(input_sample)
+
+    def __len__(self):
+        return len(self.df)
 
     def split_by_column(self, col):
         """

@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-import torchvision.transforms.functional as tvf
 import cv2
 from imgaug import augmenters as iaa
 
@@ -31,7 +30,7 @@ def _resize_pad_array(x, desired_size):
     old_size = x.shape
     ratio = float(desired_size)/max(old_size)
     new_size = tuple([int(sz*ratio) for sz in old_size])
-    x = cv2.resize(x, (new_size[1], new_size[0]), interpolation=cv2.INTER_AREA)
+    x = cv2.resize(x.astype(np.float32), (new_size[1], new_size[0]), interpolation=cv2.INTER_AREA)
     
     delta_w = desired_size - new_size[1]
     delta_h = desired_size - new_size[0]
@@ -58,14 +57,10 @@ class ResizePadArray(object):
             x = torch.from_numpy(_resize_pad_array(x, self.desired_size))
         elif isinstance(x, torch.Tensor):
             x = torch.from_numpy(_resize_pad_array(x.numpy(), self.desired_size))
-        # x = tvf.to_tensor(x)
         if y is not None:
-            y = tvf.from_numpy(_resize_pad_array(y, self.desired_size))
-            # y = tvf.to_tensor(y)
+            y = torch.from_numpy(_resize_pad_array(y, self.desired_size))
             return x, y
         else:
-            #plt.imshow(np.rollaxis(x.numpy(), 0, 3))
-            #plt.show()
             return x
 
 class ExpandDims(object):
@@ -81,7 +76,7 @@ class ExpandDims(object):
         elif isinstance(x, torch.Tensor):
             x = torch.from_numpy(np.expand_dims(x.numpy(), axis=self.axis))
         if y is not None:
-            y = tvf.from_numpy(_resize_pad_array(y, self.desired_size))
+            y = torch.from_numpy(_resize_pad_array(y, self.desired_size))
             return x, y
         else:
             return x
