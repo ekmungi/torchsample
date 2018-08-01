@@ -11,6 +11,8 @@ import pandas as pd
 import PIL.Image as Image
 import nibabel
 from cv2 import imread
+import imageio
+from sklearn.preprocessing import OneHotEncoder
 
 import torch as th
 
@@ -645,3 +647,71 @@ def _finds_inputs_and_targets(directory, class_mode, class_to_idx=None,
         return inputs
     else:
         return inputs, targets
+
+
+class WorkflowDataset(BaseDataset):
+
+    def __init__(self,
+                 video_path,
+                 phase_path,
+                 instrument_path,
+                 input_transform=None):
+        """
+        Specifically desiged for loading data for worklow analysis
+        in surgical videos.
+
+        Arguments
+        ---------
+        video_path : string pointing to the location of the video
+        phase_path : string pointing to the location of the phase annotations
+        instrument_path : string pointing to the location of the instrument annotations
+        
+        input_transform : class which implements a __call__ method
+            tranform(s) to apply to inputs during runtime loading
+
+        """
+        self.video_path = video_path
+        self.phase_path = phase_path
+        self.instrument_path = instrument_path
+
+        self.process_inputs()
+        self.input_transform = _process_transform_argument(input_transform, self.num_inputs)
+
+    def process_inputs(self):
+        self.video = imageio.get_reader(self.video_path)
+        self.phase_data = _one_hot_encoder_(pd.read_csv(self.phase_path).values[:,1]).toarray().view(np.float32)
+        self.instrument_annotation = pd.read_csv(self.instrument_path, index_col=0)
+        
+    def __getitem__(self, index):
+        """
+        Index the dataset and return the input + target
+        """
+        current_frame = self.video.get_data(index)
+        transformed_image = Transformations.perform_image_transformations(current_frame, 
+                                                        transformations=self.transformations)
+        instrument_annotation = None
+        try:
+            instrument_annotation = self.instrument_annotation.loc[index].values
+        except:
+            nearest_index = _find_nearest_(self.instrument_annotation.index.values, index)
+            instrument_annotation = self.instrument_annotation.loc[nearest_index].values
+        return (transformed_image, self.phase_data[index, :], instrument_annotation)
+
+
+
+    def __len__(self):
+        eturn self.video._get_meta_data(0)['nframes']
+
+
+
+
+def _one_hot_encoder_(label):
+    encoder = OneHotEncoder(dtype=np.float32)
+    label_1hot = encoder.fit_transform(label.reshape(-1,1))
+    print('The labels are: {}'.format(np.unique(label)))
+    return label_1hot
+
+def _find_nearest_(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return array[idx]
