@@ -674,8 +674,11 @@ class WorkflowDataset(BaseDataset):
         self.phase_path = phase_path
         self.instrument_path = instrument_path
 
+        self.num_inputs = 1
+
         self.process_inputs()
         self.input_transform = _process_transform_argument(input_transform, self.num_inputs)
+        self.input_return_processor = _return_first_element_of_list if self.num_inputs==1 else _pass_through
 
     def process_inputs(self):
         self.video = imageio.get_reader(self.video_path)
@@ -686,21 +689,21 @@ class WorkflowDataset(BaseDataset):
         """
         Index the dataset and return the input + target
         """
-        current_frame = self.video.get_data(index)
-        transformed_image = Transformations.perform_image_transformations(current_frame, 
-                                                        transformations=self.transformations)
+
+        input_sample = [self.input_transform[i](self.video.get_data(index)) for i in range(self.num_inputs)]
+
         instrument_annotation = None
         try:
             instrument_annotation = self.instrument_annotation.loc[index].values
         except:
             nearest_index = _find_nearest_(self.instrument_annotation.index.values, index)
             instrument_annotation = self.instrument_annotation.loc[nearest_index].values
-        return (transformed_image, self.phase_data[index, :], instrument_annotation)
+        return (self.input_return_processor(input_sample), self.phase_data[index, :], instrument_annotation)
 
 
 
     def __len__(self):
-        eturn self.video._get_meta_data(0)['nframes']
+        return self.video._get_meta_data(0)['nframes']
 
 
 
