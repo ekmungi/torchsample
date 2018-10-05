@@ -677,8 +677,11 @@ class WorkflowDataset(BaseDataset):
         self.num_inputs = 1
         self.num_phases = num_phases
 
+        self.num_inputs = 1
+
         self.process_inputs()
         self.input_transform = _process_transform_argument(input_transform, self.num_inputs)
+        self.input_return_processor = _return_first_element_of_list if self.num_inputs==1 else _pass_through
 
     def process_inputs(self):
         self.video = imageio.get_reader(self.video_path)
