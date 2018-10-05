@@ -654,7 +654,8 @@ class WorkflowDataset(BaseDataset):
     def __init__(self,
                  video_path,
                  phase_path,
-                 instrument_path,
+                 num_phases,
+                 instrument_path=None,
                  input_transform=None):
         """
         Specifically desiged for loading data for worklow analysis
@@ -673,6 +674,8 @@ class WorkflowDataset(BaseDataset):
         self.video_path = video_path
         self.phase_path = phase_path
         self.instrument_path = instrument_path
+        self.num_inputs = 1
+        self.num_phases = num_phases
 
         self.num_inputs = 1
 
@@ -682,23 +685,32 @@ class WorkflowDataset(BaseDataset):
 
     def process_inputs(self):
         self.video = imageio.get_reader(self.video_path)
-        self.phase_data = _one_hot_encoder_(pd.read_csv(self.phase_path).values[:,1]).toarray().view(np.float32)
-        self.instrument_annotation = pd.read_csv(self.instrument_path, index_col=0)
+        self.one_hot_encoder = _fit_one_hot_encoder_(np.arange(self.num_phases))
+        self.phase_data = self.one_hot_encoder.transform(pd.read_csv(self.phase_path).values[:,1].reshape(-1, 1)).toarray().view(np.float32)
+        if self.instrument_path is not None:
+            self.instrument_annotation = pd.read_csv(self.instrument_path, index_col=0)
+
         
     def __getitem__(self, index):
         """
         Index the dataset and return the input + target
         """
+        current_frame = self.video.get_data(index)
+        transformed_image = [self.input_transform[0](current_frame)]
 
-        input_sample = [self.input_transform[i](self.video.get_data(index)) for i in range(self.num_inputs)]
-
-        instrument_annotation = None
-        try:
-            instrument_annotation = self.instrument_annotation.loc[index].values
-        except:
-            nearest_index = _find_nearest_(self.instrument_annotation.index.values, index)
-            instrument_annotation = self.instrument_annotation.loc[nearest_index].values
-        return (self.input_return_processor(input_sample), self.phase_data[index, :], instrument_annotation)
+        # transformed_image = Transformations.perform_image_transformations(current_frame, 
+        #                                                 transformations=self.transformations)
+        
+        if self.instrument_path is not None:
+            instrument_annotation = None
+            try:
+                instrument_annotation = self.instrument_annotation.loc[index].values
+            except:
+                nearest_index = _find_nearest_(self.instrument_annotation.index.values, index)
+                instrument_annotation = self.instrument_annotation.loc[nearest_index].values
+            return (transformed_image[0], self.phase_data[index, :], instrument_annotation)
+        else:
+            return (transformed_image[0], self.phase_data[index, :])
 
 
 
@@ -706,7 +718,11 @@ class WorkflowDataset(BaseDataset):
         return self.video._get_meta_data(0)['nframes']
 
 
-
+def _fit_one_hot_encoder_(label):
+    encoder = OneHotEncoder(dtype=np.float32)
+    _ = encoder.fit(label.reshape(-1,1))
+    # print('The labels are: {}'.format(np.unique(label)))
+    return encoder
 
 def _one_hot_encoder_(label):
     encoder = OneHotEncoder(dtype=np.float32)
