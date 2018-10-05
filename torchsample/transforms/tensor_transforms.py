@@ -373,9 +373,10 @@ class RangeNormalize(object):
         for idx, _input in enumerate(inputs):
             _min_val = _input.min()
             _max_val = _input.max()
-            a = (self.max_val - self.min_val) / (_max_val - _min_val)
-            b = self.max_val- a * _max_val
-            _input = _input.mul(a).add(b)
+            if _min_val != _max_val:
+                a = (self.max_val - self.min_val) / (_max_val - _min_val)
+                b = self.max_val- a * _max_val
+                _input = _input.mul(a).add(b)
             outputs.append(_input)
         return outputs if idx > 1 else outputs[0]
 
