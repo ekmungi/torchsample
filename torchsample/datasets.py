@@ -677,34 +677,25 @@ class WorkflowDataset(BaseDataset):
         self.instrument_path = instrument_path
         self.num_inputs = 1
         self.num_phases = num_phases
-        self.current_video = -1
-        self.n_frames = 0 # Number of frames in the current_video
-        self.n_passes = n_passes # Number of passes over the same video
-
-        self.num_inputs = 1
 
         # Run this once to ensure the one_hot_encoder model is created
         self.one_hot_encoder = _fit_one_hot_encoder_(np.arange(self.num_phases))
-        self._update_video()
+        self._process_input_()
 
         self.input_transform = _process_transform_argument(input_transform, self.num_inputs)
         self.input_return_processor = _return_first_element_of_list if self.num_inputs==1 else _pass_through
 
-    def _update_video(self):
-        self.current_video += 1
-        if self.current_video > len(self.video_path)-1:
-            self.current_video = 0
-        
-        print("\n\n{0}\n\n".format(self.video_path[self.current_video]))
 
-        self.video = imageio.get_reader(self.video_path[self.current_video])
+    def _process_input_(self):
+
+        self.video = imageio.get_reader(self.video_path)
         # self.phase_data = self.one_hot_encoder.transform(pd.read_csv(self.phase_path[self.current_video]).values[:,1].reshape(-1, 1)).toarray().view(np.float32)
-        self.phase_data = pd.read_csv(self.phase_path[self.current_video], header=None, index_col=False).values[:,1].reshape(-1, 1)
+        self.phase_data = pd.read_csv(self.phase_path, header=None, index_col=False).values[:,1].reshape(-1, 1)
 
         if self.instrument_path is not None:
-            self.instrument_annotation = pd.read_csv(self.instrument_path[self.current_video], index_col=0)
-
-        self.n_frames = len(self.video)-1
+            self.instrument_annotation = pd.read_csv(self.instrument_path, index_col=0)
+        else:
+            self.instrument_annotation = None
 
         
     def __getitem__(self, index):
@@ -718,8 +709,7 @@ class WorkflowDataset(BaseDataset):
         # transformed_image = Transformations.perform_image_transformations(current_frame, 
         #                                                 transformations=self.transformations)
         
-        if self.instrument_path is not None:
-            instrument_annotation = None
+        if self.instrument_annotation is not None:
             try:
                 instrument_annotation = self.instrument_annotation.loc[index].values
             except:
