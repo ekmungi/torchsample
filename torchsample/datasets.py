@@ -656,15 +656,16 @@ class WorkflowDataset(BaseDataset):
                  phase_path,
                  num_phases,
                  instrument_path=None,
-                 input_transform=None):
+                 input_transform=None,
+                 n_passes=1):
         """
         Specifically desiged for loading data for worklow analysis
         in surgical videos.
 
         Arguments
         ---------
-        video_path : string pointing to the location of the video
-        phase_path : string pointing to the location of the phase annotations
+        video_path : list of strings pointing to the location of the videos
+        phase_path : list of strings pointing to the location of the phase annotations
         instrument_path : string pointing to the location of the instrument annotations
         
         input_transform : class which implements a __call__ method
@@ -676,25 +677,41 @@ class WorkflowDataset(BaseDataset):
         self.instrument_path = instrument_path
         self.num_inputs = 1
         self.num_phases = num_phases
+        self.current_video = -1
+        self.n_frames = 0 # Number of frames in the current_video
+        self.n_passes = n_passes # Number of passes over the same video
 
         self.num_inputs = 1
 
-        self.process_inputs()
+        # Run this once to ensure the one_hot_encoder model is created
+        self.one_hot_encoder = _fit_one_hot_encoder_(np.arange(self.num_phases))
+        self._update_video()
+
         self.input_transform = _process_transform_argument(input_transform, self.num_inputs)
         self.input_return_processor = _return_first_element_of_list if self.num_inputs==1 else _pass_through
 
-    def process_inputs(self):
-        self.video = imageio.get_reader(self.video_path)
-        self.one_hot_encoder = _fit_one_hot_encoder_(np.arange(self.num_phases))
-        self.phase_data = self.one_hot_encoder.transform(pd.read_csv(self.phase_path).values[:,1].reshape(-1, 1)).toarray().view(np.float32)
+    def _update_video(self):
+        self.current_video += 1
+        if self.current_video > len(self.video_path)-1:
+            self.current_video = 0
+        
+        print("\n\n{0}\n\n".format(self.video_path[self.current_video]))
+
+        self.video = imageio.get_reader(self.video_path[self.current_video])
+        # self.phase_data = self.one_hot_encoder.transform(pd.read_csv(self.phase_path[self.current_video]).values[:,1].reshape(-1, 1)).toarray().view(np.float32)
+        self.phase_data = pd.read_csv(self.phase_path[self.current_video], header=None, index_col=False).values[:,1].reshape(-1, 1)
+
         if self.instrument_path is not None:
-            self.instrument_annotation = pd.read_csv(self.instrument_path, index_col=0)
+            self.instrument_annotation = pd.read_csv(self.instrument_path[self.current_video], index_col=0)
+
+        self.n_frames = len(self.video)-1
 
         
     def __getitem__(self, index):
         """
         Index the dataset and return the input + target
         """
+
         current_frame = self.video.get_data(index)
         transformed_image = [self.input_transform[0](current_frame)]
 
@@ -708,14 +725,17 @@ class WorkflowDataset(BaseDataset):
             except:
                 nearest_index = _find_nearest_(self.instrument_annotation.index.values, index)
                 instrument_annotation = self.instrument_annotation.loc[nearest_index].values
-            return (transformed_image[0], self.phase_data[index, :], instrument_annotation)
+            # return (transformed_image[0], self.phase_data[index, :], instrument_annotation)
+            return (transformed_image[0], self.phase_data[index], instrument_annotation)
         else:
-            return (transformed_image[0], self.phase_data[index, :])
+            # return (transformed_image[0], self.phase_data[index, :])
+            return (transformed_image[0], self.phase_data[index].squeeze())
 
-
+        
 
     def __len__(self):
-        return self.video._get_meta_data(0)['nframes']
+        # return self.video._get_meta_data(0)['nframes'] # SAME THING
+        return len(self.video)
 
 
 def _fit_one_hot_encoder_(label):
