@@ -664,9 +664,9 @@ class WorkflowDataset(BaseDataset):
 
         Arguments
         ---------
-        video_path : list of strings pointing to the location of the videos
-        phase_path : list of strings pointing to the location of the phase annotations
-        instrument_path : string pointing to the location of the instrument annotations
+        video_path : path to the location of the video
+        phase_path : path to the location of the phase annotations
+        instrument_path : path to the location of the instrument annotations
         
         input_transform : class which implements a __call__ method
             tranform(s) to apply to inputs during runtime loading
@@ -726,6 +726,125 @@ class WorkflowDataset(BaseDataset):
     def __len__(self):
         # return self.video._get_meta_data(0)['nframes'] # SAME THING
         return len(self.video)
+
+
+
+
+class WorkflowListDataset(BaseDataset):
+    def __init__(self, 
+                 video_path, 
+                 phase_path, 
+                 instrument_path, 
+                 num_phases=14,
+                 video_extn = '.avi',
+                 image_transform=None):
+
+        """
+        Specifically desiged for loading data for worklow analysis
+        in surgical videos. This class takes a list of videos and phases
+        files and randomly samples frames. Is especially useful for 
+        pre-training.
+
+        Arguments
+        ---------
+        video_path : pointing to the location of the videos
+        phase_path : pointing to the location of the phase annotations
+        instrument_path : string pointing to the location of the instrument annotations
+        
+        input_transform : class which implements a __call__ method
+            tranform(s) to apply to inputs during runtime loading
+
+        """
+        
+        self.video_path = video_path
+        self.phase_path = phase_path
+        self.video_extn = video_extn
+        self.instrument_path = instrument_path
+        # self.current_video = -1
+        self.num_phases = num_phases
+        self.image_transform = image_transform
+        # self.batch_size = batch_size
+        # self.shuffle = shuffle
+        self.batch_list = []
+
+    def _process_(self):
+
+        phase_list = glob(os.path.join(self.phase_path, 'phase_annotations', '*.csv'))
+        self.phase_list = []
+        self.video_list = []
+        for phase_path in phase_list:
+            _, file_name = os.path.split(phase_path)
+            file_name, _ = os.path.splitext(file_name)
+            video_path = os.path.join(self.video_path, file_name+self.video_extn)
+            if os.path.isfile(video_path) & os.path.isfile(phase_path):
+                self.phase_list.append(phase_path)
+                self.video_list.append(video_path)
+        
+        self.datasets = []
+        for video_path, phase_path in zip(self.video_list, self.phase_list):
+            datasets.append(WorkflowDataset(self.video_path, self.phase_path, self.num_phases, 
+                            self.instrument_path, input_transform=self.image_transform))
+
+        dataset_len_list = []
+        for dataset in self.datasets:
+            dataset_len_list.append(len(self.datasets))
+
+        self.dataset_length = np.sum(dataset_len_list)
+
+        # NOTE: This is not sum of # of elements but the sum of largest index in that dataset
+        self.cum_index_sum = np.cumsum(dataset_len_list) - 1
+
+
+    def _get_dataset_index_(self, cum_index):
+        
+        dataset_index = np.argmax(self.cum_index_sum>=cum_index)
+        self.cum_index_sum = [0] + list(self.cum_index_sum)
+        frame_index = cum_index - self.cum_index_sum[dataset_index]
+        return dataset_index, frame_index
+
+        
+
+    # def _update_(self):
+        
+    #     self.current_video += 1
+
+    #     # Loop back to the beginning
+    #     if self.loop:
+    #         if self.current_video > len(self.video_list)-1: 
+    #             self.current_video = 0
+        
+    #     print("\n\n{0}\n\n".format(self.video_list[self.current_video]))
+
+    #     self.video_path = self.video_list[self.current_video]
+    #     self.phase_path = self.phase_list[self.current_video]
+    #     if self.instrument_list is not None:
+    #         self.instrument_path = self.instrument_list[self.current_video]
+    #     else:
+    #         self.instrument_path = None
+
+
+    # def __next__(self):
+
+    #     if len(self.batch_list) == 0:
+    #         self._update_()
+
+
+    #     dataset = WorkflowDataset(self.video_path, self.phase_path, self.num_phases, 
+    #                                 self.instrument_path, input_transform=self.image_transform)
+    #     data_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
+
+    #     return data_loader
+
+
+    def __getitem__(self, index):
+
+        dataset_index, frame_index = _get_dataset_index_(index)
+        self.datasets[dataset_index][frame_index]
+
+
+    def __len__(self):
+        
+        return self.dataset_length
 
 
 def _fit_one_hot_encoder_(label):
