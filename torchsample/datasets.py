@@ -680,7 +680,7 @@ class WorkflowDataset(BaseDataset):
         self.num_phases = num_phases
 
         # Run this once to ensure the one_hot_encoder model is created
-        self.one_hot_encoder = _fit_one_hot_encoder_(np.arange(self.num_phases))
+        # self.one_hot_encoder = _fit_one_hot_encoder_(np.arange(self.num_phases))
         self._process_input_()
 
         self.input_transform = _process_transform_argument(input_transform, self.num_inputs)
@@ -734,9 +734,9 @@ class WorkflowDataset(BaseDataset):
 
 class WorkflowListDataset(BaseDataset):
     def __init__(self, 
-                 video_path, 
-                 phase_path, 
-                 instrument_path, 
+                 video_base_path, 
+                 phase_base_path, 
+                 instrument_base_path, 
                  num_phases=14,
                  video_extn = '.avi',
                  image_transform=None):
@@ -758,10 +758,10 @@ class WorkflowListDataset(BaseDataset):
 
         """
         
-        self.video_path = video_path
-        self.phase_path = phase_path
+        self.video_base_path = video_base_path
+        self.phase_base_path = phase_base_path
         self.video_extn = video_extn
-        self.instrument_path = instrument_path
+        self.instrument_base_path = instrument_base_path
         # self.current_video = -1
         self.num_phases = num_phases
         self.image_transform = image_transform
@@ -772,38 +772,73 @@ class WorkflowListDataset(BaseDataset):
 
     def _process_(self):
 
-        phase_list = glob(os.path.join(self.phase_path, 'phase_annotations', '*.csv'))
+        phase_list = glob(os.path.join(self.phase_base_path, '*.csv'))
         self.phase_list = []
         self.video_list = []
+        self.instrument_list = []
         for phase_path in phase_list:
             _, file_name = os.path.split(phase_path)
             file_name, _ = os.path.splitext(file_name)
-            video_path = os.path.join(self.video_path, file_name+self.video_extn)
+            video_path = os.path.join(self.video_base_path, file_name+self.video_extn)
+            if self.instrument_base_path is not None:
+                instrument_path = os.path.join(self.instrument_base_path, file_name+".csv")
             if os.path.isfile(video_path) & os.path.isfile(phase_path):
                 self.phase_list.append(phase_path)
                 self.video_list.append(video_path)
+                if self.instrument_base_path is not None:
+                    self.instrument_list.append(instrument_path)
         
         self.datasets = []
-        for video_path, phase_path in zip(self.video_list, self.phase_list):
-            datasets.append(WorkflowDataset(self.video_path, self.phase_path, self.num_phases, 
-                            self.instrument_path, input_transform=self.image_transform))
+        if self.instrument_base_path is None:
+            for video_path, phase_path in zip(self.video_list, self.phase_list):
+                self.datasets.append(WorkflowDataset(video_path, phase_path, self.num_phases, 
+                                self.instrument_base_path, input_transform=self.image_transform))
+        else:
+            for video_path, phase_path, instrument_path in zip(self.video_list, self.phase_list, self.instrument_list):
+                self.datasets.append(WorkflowDataset(video_path, phase_path, self.num_phases, 
+                                                        instrument_path, input_transform=self.image_transform))
 
-        dataset_len_list = []
+
+        self.dataset_len_list = []
         for dataset in self.datasets:
-            dataset_len_list.append(len(self.datasets))
+            self.dataset_len_list.append(len(dataset))
 
-        self.dataset_length = np.sum(dataset_len_list)
+        # print("Individual dataset lengths: {0}".format(dataset_len_list))
 
+        self.dataset_length = np.sum(self.dataset_len_list)
+
+        # self.cum_dataset_length = np.cumsum(self.dataset_len_list)
         # NOTE: This is not sum of # of elements but the sum of largest index in that dataset
-        self.cum_index_sum = np.cumsum(dataset_len_list) - 1
+        # self.cum_index_sum = np.cumsum(dataset_len_list) - 1
+
+        # print("Cumulative dataset lengths: {0}".format(np.cumsum(self.dataset_len_list) - 1))
+
+
+    # def _get_dataset_index_(self, cum_index):
+        
+    #     # print("Dataloader requested: {0}".format(cum_index))
+    #     dataset_index = np.argmax(np.array(self.cum_dataset_length)-1>=cum_index)
+    #     cum_index_sum = [0] + list(self.cum_index_sum)
+    #     frame_index = cum_index - cum_index_sum[dataset_index]
+    #     return dataset_index, frame_index
 
 
     def _get_dataset_index_(self, cum_index):
         
-        dataset_index = np.argmax(self.cum_index_sum>=cum_index)
-        self.cum_index_sum = [0] + list(self.cum_index_sum)
-        frame_index = cum_index - self.cum_index_sum[dataset_index]
+        # print("Dataloader requested: {0}".format(cum_index))
+        dataset_index = np.argmax((np.cumsum(self.dataset_len_list)-1)>=cum_index)
+        cum_index_sum = [0] + list(np.cumsum(self.dataset_len_list))
+        frame_index = cum_index - cum_index_sum[dataset_index]
         return dataset_index, frame_index
+
+
+
+    # def _get_dataset_index_(cum_index, cum_index_sum_all): 
+      
+    #     dataset_index = np.argmax(np.array(cum_index_sum_all)-1>=cum_index) 
+    #     cum_index_sum = [0] + list(cum_index_sum_all) 
+    #     frame_index = cum_index - cum_index_sum[dataset_index] 
+    #     return dataset_index, frame_index
 
         
 
@@ -819,7 +854,7 @@ class WorkflowListDataset(BaseDataset):
     #     print("\n\n{0}\n\n".format(self.video_list[self.current_video]))
 
     #     self.video_path = self.video_list[self.current_video]
-    #     self.phase_path = self.phase_list[self.current_video]
+    #     self.phase_base_path = self.phase_list[self.current_video]
     #     if self.instrument_list is not None:
     #         self.instrument_path = self.instrument_list[self.current_video]
     #     else:
@@ -832,7 +867,7 @@ class WorkflowListDataset(BaseDataset):
     #         self._update_()
 
 
-    #     dataset = WorkflowDataset(self.video_path, self.phase_path, self.num_phases, 
+    #     dataset = WorkflowDataset(self.video_path, self.phase_base_path, self.num_phases, 
     #                                 self.instrument_path, input_transform=self.image_transform)
     #     data_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=self.shuffle)
 
@@ -842,7 +877,10 @@ class WorkflowListDataset(BaseDataset):
     def __getitem__(self, index):
 
         dataset_index, frame_index = self._get_dataset_index_(index)
+        # print("Provided Index: {0}, Dataset Index: {1}, Frame ID: {2}".format(index, dataset_index, frame_index))
+        # image, phase = self.datasets[dataset_index][frame_index]
         return self.datasets[dataset_index][frame_index]
+        # return 5, 6
 
 
     def __len__(self):
