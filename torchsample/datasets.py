@@ -5,6 +5,7 @@ from __future__ import division
 
 import os
 import fnmatch
+from glob import glob
 
 import numpy as np
 import pandas as pd
@@ -767,6 +768,7 @@ class WorkflowListDataset(BaseDataset):
         # self.batch_size = batch_size
         # self.shuffle = shuffle
         self.batch_list = []
+        self._process_()
 
     def _process_(self):
 
@@ -839,8 +841,8 @@ class WorkflowListDataset(BaseDataset):
 
     def __getitem__(self, index):
 
-        dataset_index, frame_index = _get_dataset_index_(index)
-        self.datasets[dataset_index][frame_index]
+        dataset_index, frame_index = self._get_dataset_index_(index)
+        return self.datasets[dataset_index][frame_index]
 
 
     def __len__(self):
