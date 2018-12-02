@@ -693,9 +693,9 @@ class WorkflowDataset(BaseDataset):
         self.phase_data = pd.read_csv(self.phase_path, header=None, index_col=False).values[:,1].reshape(-1, 1)
 
         if self.instrument_path is not None:
-            self.instrument_annotation = pd.read_csv(self.instrument_path, index_col=0)
+            self.instrument_annotation_data = pd.read_csv(self.instrument_path, index_col=0)
         else:
-            self.instrument_annotation = None
+            self.instrument_annotation_data = None
 
         
     def __getitem__(self, index):
@@ -709,16 +709,17 @@ class WorkflowDataset(BaseDataset):
         # transformed_image = Transformations.perform_image_transformations(current_frame, 
         #                                                 transformations=self.transformations)
         
-        if self.instrument_annotation is not None:
+        if self.instrument_annotation_data is not None:
             try:
-                instrument_annotation = self.instrument_annotation.loc[index].values
+                instrument_annotation = self.instrument_annotation_data.loc[index].values
             except:
-                nearest_index = _find_nearest_(self.instrument_annotation.index.values, index)
-                instrument_annotation = self.instrument_annotation.loc[nearest_index].values
+                nearest_index = _find_nearest_(self.instrument_annotation_data.index.values, index)
+                instrument_annotation = self.instrument_annotation_data.loc[nearest_index].values
             # return (transformed_image[0], self.phase_data[index, :], instrument_annotation)
             return (transformed_image[0], self.phase_data[index], instrument_annotation)
         else:
             # return (transformed_image[0], self.phase_data[index, :])
+            instrument_annotation = None
             return (transformed_image[0], self.phase_data[index].squeeze())
 
         
